@@ -1,2 +1,2 @@
 # MPRO-PROJ
-Projet d'optimisation robuste du MPRO.
+Projet d'optimisation robuste du MPRO de Ronan Leprat et Aurélien Arnoux
