@@ -5,7 +5,7 @@ Le fichier PROJ contient notre modélisation théorique du problème.
 
 ## TODO
 
-- [ ] - Implémenter méthode statique.
+- [x] - Implémenter méthode statique.
 - [ ] - Implémenter méthode robuste par dualisation.
 - [ ] - Implémenter méthode robuste par plans coupants.
 - [ ] - Implémenter méthode robuste par branch-and-cut.
