@@ -15,18 +15,7 @@ function parse(file::String)
     include(file)
     distances = distance_matrix(coordinates)
 
-    data = Dict(
-        "n" => n,
-        "L" => L,
-        "W" => W,
-        "K" => K,
-        "B" => B,
-        "w_v" => w_v,
-        "W_v" => W_v,
-        "lh" => lh,
-        "coordinates" => coordinates,
-        "distances" => distances
-    )
+    data = (n, L, W, K, B, w_v, W_v, lh, coordinates, distances)
 
     return data
 end
