@@ -11,8 +11,7 @@ function distance_matrix(coords::Matrix{Float64})
     return D
 end
 
-function parse(file::String)
-    include(file)
+function parse()
     distances = distance_matrix(coordinates)
 
     data = (n, L, W, K, B, w_v, W_v, lh, coordinates, distances)
