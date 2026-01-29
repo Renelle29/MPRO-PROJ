@@ -1,6 +1,8 @@
 function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances)
 
     mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)

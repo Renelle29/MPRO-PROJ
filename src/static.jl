@@ -1,6 +1,8 @@
 function solve_static(n,K,B,w_v,distances)
 
     mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)

@@ -2,6 +2,8 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "LazyConstraints", 1)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
@@ -109,6 +111,8 @@ end
 function main_solve_cp(n, K, B, U1, U2)
 
     mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
@@ -143,6 +147,8 @@ end
 function sub_solve_1(n, L, lh, distances, x_opt)
 
     mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
 
     @variable(mod, 0 <= δ1[1:n,1:n] <= 3)
 
@@ -156,7 +162,7 @@ function sub_solve_1(n, L, lh, distances, x_opt)
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     δ1_opt = JuMP.value(δ1)
 
-    println("L'optimum vaut $(optimum)\nTrouvé en $(round(solve_time, digits=3)) seconds")
+    #println("L'optimum vaut $(optimum)\nTrouvé en $(round(solve_time, digits=3)) seconds")
 
     return (optimum, solve_time, δ1_opt)
 end
@@ -165,6 +171,8 @@ end
 function sub_solve_2(n, W, w_v, W_v, y_opt, k)
 
     mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 60)
     
     @variable(mod, 0 <= δ2[i=1:n] <= W_v[i])
     
@@ -178,7 +186,7 @@ function sub_solve_2(n, W, w_v, W_v, y_opt, k)
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     δ2_opt = JuMP.value(δ2)
     
-    println("L'optimum vaut $(optimum)\nTrouvé en $(round(solve_time, digits=3)) seconds")
+    #println("L'optimum vaut $(optimum)\nTrouvé en $(round(solve_time, digits=3)) seconds")
     
     return (optimum, solve_time, δ2_opt)
 end
@@ -197,4 +205,21 @@ function init_incertitude_sets(n,w_v,distances)
     U2 = [copy(w2)]
 
     return (U1, U2)
+end
+
+function is_feasable()
+
+    feasable = true
+
+    for k in 1:K
+
+        (optimum, solve_time, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_opt, k)
+
+        if optimum - B > 0.001
+            feasable = false
+        end
+
+    end
+    
+    return feasable
 end
