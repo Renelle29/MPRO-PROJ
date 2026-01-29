@@ -2,7 +2,7 @@ function solve_static(n,K,B,w_v,distances)
 
     mod = Model(Gurobi.Optimizer)
 
-    @variable(mod, x[1:n,1:n], Bin)
+    @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
 
     @constraint(mod, [k in 1:K], sum(w_v[i] * y[i,k] for i in 1:n) <= B) # Max weight for a set K_i

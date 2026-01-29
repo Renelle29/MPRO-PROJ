@@ -1,4 +1,64 @@
-function solve_cutting_planes(n, L, W, K, B, w_v, W_v, lh, distances)
+function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances)
+
+    mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "LazyConstraints", 1)
+
+    @variable(mod, x[1:n,1:n] >= 0)
+    @variable(mod, y[1:n,1:K], Bin)
+    @variable(mod, z >= 0)
+
+    @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
+    @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
+
+    @objective(mod, Min, z)
+
+    function cp_callback(cb_data)
+        status = callback_node_status(cb_data, mod)
+
+        if status != MOI.CALLBACK_NODE_STATUS_INTEGER
+            return
+        end
+
+        x_val = callback_value.(cb_data, x)
+        y_val = callback_value.(cb_data, y)
+        z_val = callback_value(cb_data, z)
+
+        (optimum1, solve_time1, δ1_opt) = sub_solve_1(n, L, lh, distances, x_val)
+
+        if abs(optimum1 - z_val) > 0.001
+            con = @build_constraint(sum((distances[i,j] + δ1_opt[i,j] * (lh[i] + lh[j])) * x[i, j] for i in 1:n, j in i+1:n) <= z)
+            MOI.submit(mod, MOI.LazyConstraint(cb_data), con)
+        end
+
+        for k in 1:K
+
+            (optimum2, solve_time2, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_val, k)
+
+            if optimum2 - B > 0.001
+                con = @build_constraint(sum(w_v[i] * (1 + δ2_opt[i]) * y[i,k] for i in 1:n) <= B)
+                MOI.submit(mod, MOI.LazyConstraint(cb_data), con)           
+            end
+        end
+
+    end
+
+    MOI.set(mod, MOI.LazyConstraintCallback(), cp_callback)
+
+    optimize!(mod)
+
+    optimum = JuMP.objective_value(mod)
+    solve_time = MOI.get(mod, MOI.SolveTimeSec())
+    nodes = MOI.get(mod, MOI.NodeCount())
+    y_opt = JuMP.value(y)
+    x_opt = JuMP.value(x)
+
+    println("L'optimum vaut $(optimum)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
+
+    return (optimum, solve_time, nodes, y_opt, x_opt)
+
+end
+
+function solve_cutting_planes_noCB(n, L, W, K, B, w_v, W_v, lh, distances)
 
     # Initialize values
     optimum = 0
