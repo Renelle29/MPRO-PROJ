@@ -1,9 +1,9 @@
-function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances)
+function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "LazyConstraints", 1)
     set_optimizer_attribute(mod, "OutputFlag", 0)
-    set_optimizer_attribute(mod, "TimeLimit", 60)
+    set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
@@ -49,14 +49,15 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances)
     optimize!(mod)
 
     optimum = JuMP.objective_value(mod)
+    lb = MOI.get(mod, MOI.ObjectiveBound())
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     nodes = MOI.get(mod, MOI.NodeCount())
     y_opt = JuMP.value(y)
     x_opt = JuMP.value(x)
 
-    println("L'optimum vaut $(optimum)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
+    println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
 
-    return (optimum, solve_time, nodes, y_opt, x_opt)
+    return (optimum, lb, solve_time, nodes, y_opt, x_opt)
 
 end
 
@@ -207,19 +208,60 @@ function init_incertitude_sets(n,w_v,distances)
     return (U1, U2)
 end
 
-function is_feasable()
+function is_feasable(n, B, W, w_v, W_v, y_opt)
 
     feasable = true
 
     for k in 1:K
 
-        (optimum, solve_time, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_opt, k)
+        (optimum2, solve_time, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_opt, k)
 
-        if optimum - B > 0.001
+        if optimum2 - B > 0.001
             feasable = false
         end
-        
+
     end
     
     return feasable
+end
+
+function robust_value_feasable_solution(n, L, lh, distances, x_opt)
+
+    (optimum1, solve_time, δ1_opt) = sub_solve_1(n, L, lh, distances, x_opt)
+
+    return optimum1
+end
+
+function main_solve_cp_lp(n, K, B, U1_all, U2_all)
+    mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", 20)
+
+    @variable(mod, 1 >= x[1:n,1:n] >= 0)
+    @variable(mod, y[1:n,1:K], Bin)
+    @variable(mod, z)
+
+    # Coupes d'optimalité - Incertitude sur les distances
+    @constraint(mod, [l in 1:10], sum(U1_all[l][i, j] * x[i, j] for i in 1:n, j in i+1:n) <= z)
+
+    # Coupes de faisabilité - Incertitude sur les poids
+    @constraint(mod, [k in 1:K, u in 1:10], sum(U2_all[u][i] * y[i,k] for i in 1:n) <= B)
+
+    # Contraintes statiques inchangées
+    @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
+    @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
+
+    @objective(mod, Min, z)
+
+    optimize!(mod)
+
+    optimum = JuMP.objective_value(mod)
+    solve_time = MOI.get(mod, MOI.SolveTimeSec())
+    y_opt = JuMP.value(y)
+    x_opt = JuMP.value(x)
+    lb = MOI.get(mod, MOI.ObjectiveBound())
+
+    println("Borne duale : $(lb)\nObtenue en $(round(solve_time, digits=3)) seconds")
+
+    return (lb, solve_time, y_opt, x_opt)
 end

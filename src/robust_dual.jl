@@ -1,8 +1,8 @@
-function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances)
+function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "OutputFlag", 0)
-    set_optimizer_attribute(mod, "TimeLimit", 60)
+    set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
@@ -27,11 +27,12 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances)
     optimize!(mod)
 
     optimum = JuMP.objective_value(mod)
+    lb = MOI.get(mod, MOI.ObjectiveBound())
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     nodes = MOI.get(mod, MOI.NodeCount())
     y_opt = JuMP.value(y)
 
-    println("L'optimum vaut $(optimum)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
+    println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
 
-    return (optimum, solve_time, nodes, y_opt)
+    return (optimum, lb, solve_time, nodes, y_opt)
 end
