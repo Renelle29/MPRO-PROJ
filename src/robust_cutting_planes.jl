@@ -1,4 +1,4 @@
-function main_loop(n, L, W, K, B, w_v, W_v, lh, distances)
+function solve_cutting_planes(n, L, W, K, B, w_v, W_v, lh, distances)
 
     # Initialize values
     optimum = 0
