@@ -218,7 +218,7 @@ function is_feasable()
         if optimum - B > 0.001
             feasable = false
         end
-
+        
     end
     
     return feasable
