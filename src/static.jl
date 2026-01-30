@@ -49,7 +49,7 @@ function greedy_solution_static(n,K,B,w_v,distances)
                 set = -1
 
                 for k in 1:K
-                    c = sum(distances[i,k] * y[i,k] for i in 1:n)
+                    c = sum(distances[i,j] * y[i,k] for j in 1:n)
 
                     if sum(w_v[j] * y[j,k] for j in 1:n) + w_v[i] > B
                         c = Inf
@@ -92,4 +92,70 @@ function get_value_static(n,K,distances,y)
         end
     end
     return total
+end
+
+function regret_greedy_static(n,K,B,w_v,distances; maxIter=10000)
+    y = zeros(Int, n, K)
+    cost = Inf
+
+    for iter in 1:maxIter
+        y_temp = zeros(Int, n, K)
+        load = zeros(Float64, K)
+        assigned = falses(n)
+
+        for step in 1:n
+            best_regret = -Inf
+            best_i = 0
+            best_k = 0
+
+            for i in 1:n
+                assigned[i] && continue
+
+                costs = Float64[]
+                ks = Int[]
+
+                for k in 1:K
+                    if load[k] + w_v[i] <= B
+                        c = sum(distances[i,j] * y_temp[j,k] for j in 1:n) + 1e-6 * rand()
+                        push!(costs, c)
+                        push!(ks, k)
+                    end
+                end
+
+                if length(costs) == 0
+                    #println("No feasible cluster for item $i")
+                    break
+                end
+
+                perm = sortperm(costs)
+                c1 = costs[perm[1]]
+                k1 = ks[perm[1]]
+                c2 = length(costs) > 1 ? costs[perm[2]] : Inf
+
+                regret = c2 - c1
+
+                if regret > best_regret
+                    best_regret = regret
+                    best_i = i
+                    best_k = k1
+                end
+            end
+
+            # Assign the selected item
+            try
+                y_temp[best_i, best_k] = 1
+                load[best_k] += w_v[best_i]
+                assigned[best_i] = true 
+            catch
+                break
+            end
+        end
+
+        if sum(assigned[i] for i in 1:n) == n && get_value_static(n,K,distances,y_temp) < cost
+            cost = get_value_static(n,K,distances,y_temp)
+            y = copy(y_temp)
+        end
+    end
+
+    return y
 end
