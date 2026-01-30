@@ -1,4 +1,4 @@
-function solve_static(n,K,B,w_v,distances; TimeLimit=20, y_start=nothing)
+function solve_static(n,K,B,w_v,distances; TimeLimit=20, y_start)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "OutputFlag", 0)
@@ -7,10 +7,22 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20, y_start=nothing)
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
 
+    println("--------- Starting greedy heuristic ---------")
+    y_start, x_start = regret_greedy_static(n,K,B,w_v,distances)
+
     if y_start !== nothing
+        println("--------- Greedy heuristic done - Found a solution of cost $(get_value_static(n,K,distances,y_start)) ---------")
+
         for i in 1:n, k in 1:K
             set_start_value(y[i,k], y_start[i,k])
         end
+
+        for i in 1:n, j in 1:n
+            set_start_value(x[i,j], x_start[i,j])
+        end
+
+    else
+        println("--------- Greedy heuristic done - No solution found ---------")
     end
 
     # Symmetry breaking
@@ -163,5 +175,15 @@ function regret_greedy_static(n,K,B,w_v,distances; maxIter=10000)
         end
     end
 
-    return y
+    x = zeros((n,n))
+    for i in 1:n, j in 1:n
+        x[i,j] = sum(y[i,k] * y[j,k] for k in 1:K)
+    end
+
+    if x[1,1] == 1
+        return y, x
+    else
+        return nothing, nothing
+    end
+
 end

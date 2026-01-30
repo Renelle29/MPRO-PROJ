@@ -14,7 +14,7 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
     println("--------- Starting greedy heuristic ---------")
     y_start, x_start = regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000)
 
-    if is_feasable(n, B, W, w_v, W_v, y_start)
+    if y_start !== nothing && is_feasable(n, B, W, w_v, W_v, y_start)
         println("--------- Greedy heuristic done - Found a solution of cost $(robust_value_feasable_solution(n, L, lh, distances, x_start)) ---------")
 
         for i in 1:n, k in 1:K
@@ -74,7 +74,7 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
     println("--------- Starting greedy heuristic ---------")
     y_start, x_start = regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000)
 
-    if is_feasable(n, B, W, w_v, W_v, y_start)
+    if y_start !== nothing && is_feasable(n, B, W, w_v, W_v, y_start)
         println("--------- Greedy heuristic done - Found a solution of cost $(robust_value_feasable_solution(n, L, lh, distances, x_start)) ---------")
 
         for i in 1:n, k in 1:K
@@ -420,5 +420,9 @@ function regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000
         x[i,j] = sum(y[i,k] * y[j,k] for k in 1:K)
     end
 
-    return y, x
+    if x[1,1] == 1
+        return y, x
+    else
+        return nothing, nothing
+    end
 end
