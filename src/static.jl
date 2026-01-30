@@ -1,4 +1,4 @@
-function solve_static(n,K,B,w_v,distances; TimeLimit=20)
+function solve_static(n,K,B,w_v,distances; TimeLimit=20, y_start=nothing)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "OutputFlag", 0)
@@ -6,6 +6,12 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
 
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
+
+    if y_start !== nothing
+        for i in 1:n, k in 1:K
+            set_start_value(y[i,k], y_start[i,k])
+        end
+    end
 
     # Symmetry breaking
     #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)

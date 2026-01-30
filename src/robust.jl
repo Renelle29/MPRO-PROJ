@@ -1,3 +1,65 @@
+function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
+
+    mod = Model(Gurobi.Optimizer)
+    set_optimizer_attribute(mod, "OutputFlag", 0)
+    set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
+
+    @variable(mod, x[1:n,1:n] >= 0)
+    @variable(mod, y[1:n,1:K], Bin)
+    @variable(mod, Δ_1 >= 0)
+    @variable(mod, Δ1[1:n,1:n] >= 0)
+    @variable(mod, Δ_2[1:K] >= 0)
+    @variable(mod, Δ2[1:n,1:K] >= 0)
+
+    println("--------- Starting greedy heuristic ---------")
+    y_start, x_start = regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000)
+
+    if is_feasable(n, B, W, w_v, W_v, y_start)
+        println("--------- Greedy heuristic done - Found a solution of cost $(robust_value_feasable_solution(n, L, lh, distances, x_start)) ---------")
+
+        for i in 1:n, k in 1:K
+            set_start_value(y[i,k], y_start[i,k])
+        end
+
+        for i in 1:n, j in 1:n
+            set_start_value(x[i,j], x_start[i,j])
+        end
+
+    else
+        println("--------- Greedy heuristic done - No solution found ---------")
+    end
+
+    # Symmetry breaking
+    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
+    #@constraint(mod, y[1,1] == 0)
+    #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
+
+    # Reformulation objectif dual - Incertitude sur les distances
+    @constraint(mod, [i in 1:n, j in i+1:n], Δ_1 + Δ1[i,j] >= (lh[i] + lh[j]) * x[i,j])
+
+    # Reformulation contraintes duales - Incertitude sur les poids
+    @constraint(mod, [k in 1:K], sum(w_v[i] * y[i,k] + W_v[i] * Δ2[i,k] for i in 1:n) + W * Δ_2[k] <= B)
+    @constraint(mod, [i in 1:n, k in 1:K], Δ_2[k] + Δ2[i,k] >= w_v[i] * y[i,k])
+
+    # Contraintes statiques inchangées
+    @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
+    @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
+
+    @objective(mod, Min, L * Δ_1 + sum(3 * Δ1[i,j] + distances[i,j] * x[i,j] for i in 1:n, j in i+1:n))
+
+    optimize!(mod)
+
+    optimum = JuMP.objective_value(mod)
+    lb = MOI.get(mod, MOI.ObjectiveBound())
+    solve_time = MOI.get(mod, MOI.SolveTimeSec())
+    nodes = MOI.get(mod, MOI.NodeCount())
+    y_opt = JuMP.value(y)
+
+    println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
+
+    return (optimum, lb, solve_time, nodes, y_opt)
+end
+
 function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     mod = Model(Gurobi.Optimizer)
@@ -8,6 +70,24 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
     @variable(mod, z >= 0)
+
+    println("--------- Starting greedy heuristic ---------")
+    y_start, x_start = regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000)
+
+    if is_feasable(n, B, W, w_v, W_v, y_start)
+        println("--------- Greedy heuristic done - Found a solution of cost $(robust_value_feasable_solution(n, L, lh, distances, x_start)) ---------")
+
+        for i in 1:n, k in 1:K
+            set_start_value(y[i,k], y_start[i,k])
+        end
+
+        for i in 1:n, j in 1:n
+            set_start_value(x[i,j], x_start[i,j])
+        end
+
+    else
+        println("--------- Greedy heuristic done - No solution found ---------")
+    end
 
     # Symmetry breaking
     #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
@@ -269,4 +349,76 @@ function main_solve_cp_lp(n, K, B, U1_all, U2_all)
     println("Borne duale : $(lb)\nObtenue en $(round(solve_time, digits=3)) seconds")
 
     return (lb, solve_time, y_opt, x_opt)
+end
+
+function regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000)
+    y = zeros(Int, n, K)
+    cost = Inf
+
+    for iter in 1:maxIter
+        y_temp = zeros(Int, n, K)
+        load = zeros(Float64, K)
+        assigned = falses(n)
+
+        for step in 1:n
+            best_regret = -Inf
+            best_i = 0
+            best_k = 0
+
+            for i in 1:n
+                assigned[i] && continue
+
+                costs = Float64[]
+                ks = Int[]
+
+                for k in 1:K
+
+                    if load[k] + w_v[i] * (1 + W_v[i]) <= B
+                        c = sum(distances[i,j] * y_temp[j,k] for j in 1:n) + 3 * maximum((lh[i] + lh[j]) * y_temp[j] for j in 1:n) + 1e-6 * rand()
+                        push!(costs, c)
+                        push!(ks, k)
+                    end
+                end
+
+                if length(costs) == 0
+                    #println("No feasible cluster for item $i")
+                    break
+                end
+
+                perm = sortperm(costs)
+                c1 = costs[perm[1]]
+                k1 = ks[perm[1]]
+                c2 = length(costs) > 1 ? costs[perm[2]] : Inf
+
+                regret = c2 - c1
+
+                if regret > best_regret
+                    best_regret = regret
+                    best_i = i
+                    best_k = k1
+                end
+            end
+
+            # Assign the selected item
+            try
+                y_temp[best_i, best_k] = 1
+                load[best_k] += w_v[best_i] * (1 + W_v[best_i])
+                assigned[best_i] = true 
+            catch
+                break
+            end
+        end
+
+        if sum(assigned[i] for i in 1:n) == n && get_value_static(n,K,distances,y_temp) < cost
+            cost = get_value_static(n,K,distances,y_temp)
+            y = copy(y_temp)
+        end
+    end
+
+    x = zeros((n,n))
+    for i in 1:n, j in 1:n
+        x[i,j] = sum(y[i,k] * y[j,k] for k in 1:K)
+    end
+
+    return y, x
 end
