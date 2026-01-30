@@ -9,6 +9,11 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
     @variable(mod, y[1:n,1:K], Bin)
     @variable(mod, z >= 0)
 
+    # Symmetry breaking
+    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
+    #@constraint(mod, y[1,1] == 0)
+    #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
+
     @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
     @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
 

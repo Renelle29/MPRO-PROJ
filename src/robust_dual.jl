@@ -11,6 +11,11 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
     @variable(mod, Δ_2[1:K] >= 0)
     @variable(mod, Δ2[1:n,1:K] >= 0)
 
+    # Symmetry breaking
+    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
+    #@constraint(mod, y[1,1] == 0)
+    #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
+
     # Reformulation objectif dual - Incertitude sur les distances
     @constraint(mod, [i in 1:n, j in i+1:n], Δ_1 + Δ1[i,j] >= (lh[i] + lh[j]) * x[i,j])
 
