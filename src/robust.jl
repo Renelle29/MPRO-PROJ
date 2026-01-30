@@ -253,6 +253,37 @@ function sub_solve_1(n, L, lh, distances, x_opt)
     return (optimum, solve_time, δ1_opt)
 end
 
+function sub_solve_1_fast(n, L, lh, distances, x_opt)
+
+    pairs = Tuple{Int,Int,Float64}[]
+
+    for i in 1:n, j in i+1:n
+        coeff = x_opt[i,j] * (lh[i] + lh[j])
+        coeff > 0 && push!(pairs, (i, j, coeff))
+    end
+
+    sort!(pairs, by = x -> -x[3])
+
+    δ1 = zeros(n, n)
+    remaining = L
+
+    for (i, j, c) in pairs
+        remaining <= 0 && break
+        δ = min(3.0, remaining)
+        δ1[i,j] = δ
+        remaining -= δ
+    end
+
+    # Compute objective value
+    value = 0.0
+    for i in 1:n, j in i+1:n
+        value += x_opt[i,j] * (distances[i,j] + δ1[i,j] * (lh[i] + lh[j]))
+    end
+
+    return (value, nothing, δ1)
+end
+
+
 # Trouver la meilleure coupe de faisabilité pour une partie k donnée
 function sub_solve_2(n, W, w_v, W_v, y_opt, k)
 
@@ -276,6 +307,37 @@ function sub_solve_2(n, W, w_v, W_v, y_opt, k)
     
     return (optimum, solve_time, δ2_opt)
 end
+
+function sub_solve_2_fast(n, W, w_v, W_v, y_opt, k)
+
+    items = Tuple{Int,Float64}[]
+
+    for i in 1:n
+        if y_opt[i,k] >= 0.5 && W_v[i] > 0
+            push!(items, (i, w_v[i]))
+        end
+    end
+
+    sort!(items, by = x -> -x[2])  # descending w_i
+
+    δ2 = zeros(n)
+    remaining = W
+
+    for (i, _) in items
+        remaining <= 0 && break
+        δ = min(W_v[i], remaining)
+        δ2[i] = δ
+        remaining -= δ
+    end
+
+    value = 0.0
+    for i in 1:n
+        value += y_opt[i,k] * w_v[i] * (1 + δ2[i])
+    end
+
+    return (value, nothing, δ2)
+end
+
 
 function init_incertitude_sets(n,w_v,distances)
     l1 = zeros(n,n)
