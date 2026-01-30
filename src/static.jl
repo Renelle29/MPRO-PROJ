@@ -7,6 +7,11 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
     @variable(mod, x[1:n,1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
 
+    # Symmetry breaking
+    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
+    #@constraint(mod, y[1,1] == 0)
+    #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
+
     @constraint(mod, [k in 1:K], sum(w_v[i] * y[i,k] for i in 1:n) <= B) # Max weight for a set K_i
     @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1) # Each vertex belongs to a set
     @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1) # i & j belong to k => i & j belong to same set
