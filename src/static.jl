@@ -25,3 +25,66 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
 
     return (optimum, lb, solve_time, nodes, y_opt)
 end
+
+function greedy_solution_static(n,K,B,w_v,distances)
+    y = zeros((n,K))
+    done = zeros(n)
+
+    for _ in 1:n
+
+        total_cost = -1
+        item = -1
+        insert = -1
+
+        for i in 1:n
+            
+            if done[i] == 0
+
+                cost = Inf
+                set = -1
+
+                for k in 1:K
+                    c = sum(distances[i,k] * y[i,k] for i in 1:n)
+
+                    if sum(w_v[j] * y[j,k] for j in 1:n) + w_v[i] > B
+                        c = Inf
+                    end
+
+                    if c < cost
+                        cost = c
+                        set = k
+                    end
+                end
+
+                if cost > total_cost
+                    total_cost = cost
+                    item = i
+                    insert = set
+                end
+            end
+        end
+
+        if !(total_cost == -1)
+            done[item] = 1
+            y[item, insert] = 1
+        
+        else
+            println("Couldn't find any feasable solution")
+            break
+        end
+    end
+
+    return y
+end
+
+function get_value_static(n,K,distances,y)
+    total = 0.0
+    for k in 1:K
+        for i in 1:n
+            for j in i+1:n
+                total += distances[i,j] * y[i,k] * y[j,k]
+            end
+        end
+    end
+    return total
+end
