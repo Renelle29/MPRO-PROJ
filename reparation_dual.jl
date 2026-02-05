@@ -2,10 +2,10 @@ using JuMP
 using GLPK
 using Gurobi
 
-include("MPRO-PROJ-main/src/parser.jl")
-include("MPRO-PROJ-main/src/robust.jl")
-include("MPRO-PROJ-main/src/static.jl")
-include("MPRO-PROJ-main/amelioration_locale.jl")
+include("src/parser.jl")
+include("src/robust.jl")
+include("src/static.jl")
+include("amelioration_locale.jl")
 
 
 function relax_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=30)

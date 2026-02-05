@@ -217,7 +217,7 @@ function solve_cutting_planes_noCB(n, L, W, K, B, w_v, W_v, lh, distances)
 
     println("L'optimum robuste vaut $(optimum)\nTrouvé en $(round(elapsed, digits=3)) seconds")
 
-    return (optimum, y_opt)
+    return (optimum, elapsed, y_opt)
 end
 
 function main_solve_cp(n, K, B, U1, U2)
