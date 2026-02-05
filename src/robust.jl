@@ -483,10 +483,14 @@ function regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000
                 end
             end
 
-            # Assign
-            y_temp[best_i,best_k] = 1
-            assigned[best_i] = true
-            load[best_k] += w_v[best_i] * (1 + W_v[best_i])
+            try
+                # Assign
+                y_temp[best_i,best_k] = 1
+                assigned[best_i] = true
+                load[best_k] += w_v[best_i] * (1 + W_v[best_i])
+            catch
+                break
+            end
 
             @inbounds for i in 1:n
                 cluster_cost[i,best_k] += distances[i,best_i]

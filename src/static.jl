@@ -174,10 +174,14 @@ function regret_greedy_static(n,K,B,w_v,distances; maxIter=10000)
                 end
             end
 
-            # Assign best_i to best_k
-            y_temp[best_i, best_k] = 1
-            assigned[best_i] = true
-            load[best_k] += w_v[best_i]
+            try
+                # Assign best_i to best_k
+                y_temp[best_i, best_k] = 1
+                assigned[best_i] = true
+                load[best_k] += w_v[best_i]
+            catch
+                break
+            end
 
             for i in 1:n
                 cluster_cost[i, best_k] += distances[i, best_i]
