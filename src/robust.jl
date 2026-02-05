@@ -1,10 +1,12 @@
 function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
+    count = min_nb_pairs(n,K)
+
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "OutputFlag", 0)
     set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
 
-    @variable(mod, x[1:n,1:n] >= 0)
+    @variable(mod, 1 >= x[i=1:n,j=i+1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
     @variable(mod, Δ_1 >= 0)
     @variable(mod, Δ1[1:n,1:n] >= 0)
@@ -21,8 +23,10 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
             set_start_value(y[i,k], y_start[i,k])
         end
 
-        for i in 1:n, j in 1:n
-            set_start_value(x[i,j], x_start[i,j])
+        for i in 1:n
+            for j in i+1:n
+                set_start_value(x[i,j], x_start[i,j])
+            end
         end
 
     else
@@ -30,8 +34,12 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
     end
 
     # Symmetry breaking
-    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
-    #@constraint(mod, y[1,1] == 0)
+    fix(y[1, 1], 1; force=true)
+    for i in 1:n
+        for k in i+1:K
+            fix(y[i, k], 0; force=true)
+        end
+    end
     #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
 
     # Reformulation objectif dual - Incertitude sur les distances
@@ -43,7 +51,10 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     # Contraintes statiques inchangées
     @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
-    @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
+    @constraint(mod, [i in 1:n, j in i+1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1) 
+
+    # Strenghtening the relaxation
+    @constraint(mod, sum(x[i,j] for i in 1:n, j in i+1:n) >= count)
 
     @objective(mod, Min, L * Δ_1 + sum(3 * Δ1[i,j] + distances[i,j] * x[i,j] for i in 1:n, j in i+1:n))
 
@@ -51,23 +62,26 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     optimum = JuMP.objective_value(mod)
     lb = MOI.get(mod, MOI.ObjectiveBound())
+    gap = MOI.get(mod, MOI.RelativeGap())
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     nodes = MOI.get(mod, MOI.NodeCount())
     y_opt = JuMP.value(y)
 
     println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
 
-    return (optimum, lb, solve_time, nodes, y_opt)
+    return (optimum, lb, gap, solve_time, nodes, y_opt)
 end
 
 function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
+
+    count = min_nb_pairs(n,K)
 
     mod = Model(Gurobi.Optimizer)
     set_optimizer_attribute(mod, "LazyConstraints", 1)
     set_optimizer_attribute(mod, "OutputFlag", 0)
     set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
 
-    @variable(mod, x[1:n,1:n] >= 0)
+    @variable(mod, 1 >= x[i=1:n,j=i+1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
     @variable(mod, z >= 0)
 
@@ -81,8 +95,10 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
             set_start_value(y[i,k], y_start[i,k])
         end
 
-        for i in 1:n, j in 1:n
-            set_start_value(x[i,j], x_start[i,j])
+        for i in 1:n
+            for j in i+1:n
+                set_start_value(x[i,j], x_start[i,j])
+            end
         end
 
     else
@@ -90,12 +106,19 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
     end
 
     # Symmetry breaking
-    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
-    #@constraint(mod, y[1,1] == 0)
+    fix(y[1, 1], 1; force=true)
+    for i in 1:n
+        for k in i+1:K
+            fix(y[i, k], 0; force=true)
+        end
+    end
     #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
 
     @constraint(mod, [i in 1:n], sum(y[i,k] for k in 1:K) == 1)
-    @constraint(mod, [i in 1:n, j in 1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1)
+    @constraint(mod, [i in 1:n, j in i+1:n, k in 1:K], x[i,j] >= y[i,k] + y[j,k] - 1) 
+
+    # Strenghtening the relaxation
+    @constraint(mod, sum(x[i,j] for i in 1:n, j in i+1:n) >= count)
 
     @objective(mod, Min, z)
 
@@ -135,6 +158,7 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
 
     optimum = JuMP.objective_value(mod)
     lb = MOI.get(mod, MOI.ObjectiveBound())
+    gap = MOI.get(mod, MOI.RelativeGap())
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     nodes = MOI.get(mod, MOI.NodeCount())
     y_opt = JuMP.value(y)
@@ -142,7 +166,7 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
 
     println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
 
-    return (optimum, lb, solve_time, nodes, y_opt, x_opt)
+    return (optimum, lb, gap, solve_time, nodes, y_opt, x_opt)
 
 end
 
@@ -236,7 +260,7 @@ function sub_solve_1(n, L, lh, distances, x_opt)
     set_optimizer_attribute(mod, "OutputFlag", 0)
     set_optimizer_attribute(mod, "TimeLimit", 60)
 
-    @variable(mod, 0 <= δ1[1:n,1:n] <= 3)
+    @variable(mod, 0 <= δ1[i=1:n,j=i+1:n] <= 3)
 
     @constraint(mod, sum(δ1[i,j] for i in 1:n, j in i+1:n) <= L)
 
@@ -487,4 +511,27 @@ function regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000
     else
         return nothing, nothing
     end
+end
+
+function min_nb_pairs(n,K)
+
+    d = div(n,K)
+    r = n - K * d
+
+    count = 0
+
+    for i in 1:r
+        for j in 1:d
+            count += j
+        end
+    end
+
+    for i in 1:(K-r)
+        for j in 1:(d-1)
+            count += j
+        end
+    end
+    println("Minimum number of pairs $count")
+
+    return count
 end
