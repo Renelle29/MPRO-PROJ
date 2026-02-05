@@ -189,7 +189,7 @@ function solve_cutting_planes_noCB(n, L, W, K, B, w_v, W_v, lh, distances)
         (optimum, solve_time, nodes, y_opt, x_opt) = main_solve_cp(n, K, B, U1, U2)
 
         # Ajout d'une coupe si on a surévalué l'optimum robuste
-        (optimum1, solve_time1, δ1_opt) = sub_solve_1(n, L, lh, distances, x_opt)
+        (optimum1, solve_time1, δ1_opt) = sub_solve_1_fast(n, L, lh, distances, x_opt)
         if abs(optimum1 - optimum) > 0.001
             optimal = false
             l1 = zeros(n,n)
@@ -201,7 +201,7 @@ function solve_cutting_planes_noCB(n, L, W, K, B, w_v, W_v, lh, distances)
 
         # Ajout de coupes si on a violé des contraintes robustes
         for k in 1:K
-            (optimum2, solve_time2, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_opt, k)
+            (optimum2, solve_time2, δ2_opt) = sub_solve_2_fast(n, W, w_v, W_v, y_opt, k)
             if optimum2 - B > 0.001
                 optimal = false
                 w2 = zeros(n)
@@ -447,6 +447,9 @@ function regret_greedy_robust(n, W, K, B, w_v, W_v, lh, distances; maxIter=10000
         y_temp = zeros(Int, n, K)
         load = zeros(Float64, K)
         assigned = falses(n)
+
+        cluster_cost = zeros(Float64, n, K)
+        cluster_lh_max = zeros(Float64, K)
 
         for step in 1:n
             best_regret = -Inf
