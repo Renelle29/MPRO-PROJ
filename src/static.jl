@@ -6,7 +6,7 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
     set_optimizer_attribute(mod, "OutputFlag", 0)
     set_optimizer_attribute(mod, "TimeLimit", TimeLimit)
 
-    @variable(mod, 1 >= x[1:n,1:n] >= 0)
+    @variable(mod, 1 >= x[i=1:n,j=i+1:n] >= 0)
     @variable(mod, y[1:n,1:K], Bin)
 
     println("--------- Starting greedy heuristic ---------")
@@ -19,17 +19,22 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
             set_start_value(y[i,k], y_start[i,k])
         end
 
-        for i in 1:n, j in 1:n
-            set_start_value(x[i,j], x_start[i,j])
+        for i in 1:n
+            for j in i+1:n
+                set_start_value(x[i,j], x_start[i,j])
+            end
         end
-
     else
         println("--------- Greedy heuristic done - No solution found ---------")
     end
 
     # Symmetry breaking
-    #@constraint(mod, [i in 1:n, k in i+1:K], y[i,k] == 0)
-    #@constraint(mod, y[1,1] == 0)
+    fix(y[1, 1], 1; force=true)
+    for i in 1:n
+        for k in i+1:K
+            fix(y[i, k], 0; force=true)
+        end
+    end
     #@constraint(mod, [k in 1:K-1], sum(y[i,k] for i in 1:n) >= sum(y[i,k+1] for i in 1:n))
 
     @constraint(mod, [k in 1:K], sum(w_v[i] * y[i,k] for i in 1:n) <= B) # Max weight for a set K_i
@@ -39,6 +44,8 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
 
     # Strenghtening the relaxation
     @constraint(mod, sum(x[i,j] for i in 1:n, j in i+1:n) >= count)
+    #Triangle inequalities
+    #@constraint(mod, [i in 1:n, j in i+1:n, l in i+1:j-1, k in 1:K], x[i,j] >= x[i,l] + x[l,j] - 1)
 
     @objective(mod, Min, sum(distances[i,j] * x[i,j] for i in 1:n, j in i+1:n))
 
@@ -46,6 +53,7 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
 
     optimum = JuMP.objective_value(mod)
     lb = MOI.get(mod, MOI.ObjectiveBound())
+    gap = MOI.get(mod, MOI.RelativeGap())
     solve_time = MOI.get(mod, MOI.SolveTimeSec())
     nodes = MOI.get(mod, MOI.NodeCount())
     y_opt = JuMP.value(y)
@@ -53,7 +61,7 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
 
     println("L'optimum vaut $(optimum). Meilleure borne inf $(lb)\n$(nodes) noeuds ont été explorés en $(round(solve_time, digits=3)) seconds")
 
-    return (optimum, lb, solve_time, nodes, y_opt, x_opt)
+    return (optimum, lb, gap, solve_time, nodes, y_opt, x_opt)
 end
 
 function greedy_solution_static(n,K,B,w_v,distances)
