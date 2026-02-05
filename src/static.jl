@@ -1,4 +1,4 @@
-function solve_static(n,K,B,w_v,distances; TimeLimit=20)
+function solve_static(n,K,B,w_v,distances; TimeLimit=20, heuristicIter=10000)
 
     count = min_nb_pairs(n,K)
 
@@ -10,7 +10,8 @@ function solve_static(n,K,B,w_v,distances; TimeLimit=20)
     @variable(mod, y[1:n,1:K], Bin)
 
     println("--------- Starting greedy heuristic ---------")
-    y_start, x_start = regret_greedy_static(n,K,B,w_v,distances)
+    y_start, x_start = regret_greedy_static(n,K,B,w_v,distances; maxIter=heuristicIter)
+    y_start, x_start = canonicalize_solution(y_start)
 
     if y_start !== nothing
         println("--------- Greedy heuristic done - Found a solution of cost $(get_value_static(n,K,distances,y_start)) ---------")
@@ -136,6 +137,8 @@ function regret_greedy_static(n,K,B,w_v,distances; maxIter=10000)
         load = zeros(Float64, K)
         assigned = falses(n)
 
+        cluster_cost = zeros(Float64, n, K)
+
         for step in 1:n
             best_regret = -Inf
             best_i = 0
@@ -144,43 +147,40 @@ function regret_greedy_static(n,K,B,w_v,distances; maxIter=10000)
             for i in 1:n
                 assigned[i] && continue
 
-                costs = Float64[]
-                ks = Int[]
+                best1 = Inf
+                best2 = Inf
+                bestk = 0
 
                 for k in 1:K
                     if load[k] + w_v[i] <= B
-                        c = sum(distances[i,j] * y_temp[j,k] for j in 1:n) + 1e-6 * rand()
-                        push!(costs, c)
-                        push!(ks, k)
+                        c = cluster_cost[i,k] + 1e-6 * rand()
+
+                        if c < best1
+                            best2 = best1
+                            best1 = c
+                            bestk = k
+                        elseif c < best2
+                            best2 = c
+                        end
                     end
                 end
 
-                if length(costs) == 0
-                    #println("No feasible cluster for item $i")
-                    break
-                end
-
-                perm = sortperm(costs)
-                c1 = costs[perm[1]]
-                k1 = ks[perm[1]]
-                c2 = length(costs) > 1 ? costs[perm[2]] : Inf
-
-                regret = c2 - c1
+                regret = best2 - best1
 
                 if regret > best_regret
                     best_regret = regret
                     best_i = i
-                    best_k = k1
+                    best_k = bestk
                 end
             end
 
-            # Assign the selected item
-            try
-                y_temp[best_i, best_k] = 1
-                load[best_k] += w_v[best_i]
-                assigned[best_i] = true 
-            catch
-                break
+            # Assign best_i to best_k
+            y_temp[best_i, best_k] = 1
+            assigned[best_i] = true
+            load[best_k] += w_v[best_i]
+
+            for i in 1:n
+                cluster_cost[i, best_k] += distances[i, best_i]
             end
         end
 
@@ -245,4 +245,33 @@ function min_nb_pairs(n,K)
     println("Minimum number of pairs $count")
 
     return count
+end
+
+# From a solution, return a solution that respect Symmetry constraints
+function canonicalize_solution(y)
+    n, K = size(y)
+
+    # Get smallest item of a cluster
+    sig = fill(Inf, K)
+    for k in 1:K
+        for i in 1:n
+            if y[i,k] == 1
+                sig[k] = i
+                break
+            end
+        end
+    end
+
+    perm = sortperm(sig) # Index of clusters by increasing smallest item
+
+    # Reorder y
+    y_new = y[:, perm]
+
+    # Recompute x
+    x_new = zeros(n, n)
+    for i in 1:n, j in 1:n
+        x_new[i,j] = sum(y_new[i,k] * y_new[j,k] for k in 1:K)
+    end
+
+    return y_new, x_new
 end
