@@ -1,3 +1,5 @@
+
+
 function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
 
     count = min_nb_pairs(n,K)
@@ -73,7 +75,7 @@ function solve_robust_dual(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
     return (optimum, lb, gap, solve_time, nodes, y_opt)
 end
 
-function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=20)
+function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLimit=400)
 
     count = min_nb_pairs(n,K)
 
@@ -135,7 +137,7 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
         y_val = callback_value.(cb_data, y)
         z_val = callback_value(cb_data, z)
 
-        (optimum1, solve_time1, δ1_opt) = sub_solve_1(n, L, lh, distances, x_val)
+        (optimum1, solve_time1, δ1_opt) = sub_solve_1_fast(n, L, lh, distances, x_val)
 
         if abs(optimum1 - z_val) > 0.001
             con = @build_constraint(sum((distances[i,j] + δ1_opt[i,j] * (lh[i] + lh[j])) * x[i, j] for i in 1:n, j in i+1:n) <= z)
@@ -144,7 +146,7 @@ function solve_cutting_planes_CB(n, L, W, K, B, w_v, W_v, lh, distances; TimeLim
 
         for k in 1:K
 
-            (optimum2, solve_time2, δ2_opt) = sub_solve_2(n, W, w_v, W_v, y_val, k)
+            (optimum2, solve_time2, δ2_opt) = sub_solve_2_fast(n, W, w_v, W_v, y_val, k)
 
             if optimum2 - B > 0.001
                 con = @build_constraint(sum(w_v[i] * (1 + δ2_opt[i]) * y[i,k] for i in 1:n) <= B)
@@ -182,7 +184,7 @@ function solve_cutting_planes_noCB(n, L, W, K, B, w_v, W_v, lh, distances)
     t0 = time_ns()
 
     # Boucle d'optimisation via plans coupants
-    while (!optimal)
+    while (!optimal) && ((time_ns() - t0) / 1e9) <= 400
         optimal = true
         
         # Résoudre problème principal

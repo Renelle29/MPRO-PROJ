@@ -193,7 +193,7 @@ end
 
 function process_all_data(data_folder::String, output_csv::String)
     # Lister tous les fichiers de données (ajustez l'extension si nécessaire)
-    files = filter(f -> endswith(f, ".jl"), readdir(data_folder))
+    files = filter(f -> endswith(f, ".tsp"), readdir(data_folder))
     
     all_rows = []
     for f in files

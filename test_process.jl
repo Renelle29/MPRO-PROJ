@@ -159,8 +159,9 @@ function evaluate_file(file_path::String)
                          res[:optimum] !== nothing]
     
     # Meilleure borne inférieure (LB) parmi toutes les méthodes qui en fournissent
-    valid_lbs = [res[:lb] for res in values(all_results) 
-                 if res !== nothing && haskey(res, :lb) && res[:lb] !== nothing]
+    valid_lbs = [(name == :solve_static ? res[:optimum] : res[:lb]) 
+    for (name, res) in all_results if res !== nothing && haskey(res, (name == :solve_static ? :optimum : :lb))
+         && res[(name == :solve_static ? :optimum : :lb)] !== nothing]
 
     # Détermination des valeurs de référence
     min_opt_robust = isempty(valid_opts_robust) ? NaN : minimum(valid_opts_robust)
@@ -210,4 +211,4 @@ function evaluate_file(file_path::String)
     println("-"^40)
 end
 
-evaluate_file("data/22_ulysses_3.tsp")
+evaluate_file("data/10_ulysses_6.tsp")
