@@ -3,9 +3,9 @@ using CSV
 using JuMP
 using Gurobi
 
-include("src/parser.jl")
-include("src/static.jl")
-include("src/robust.jl")
+include("../src/parser.jl")
+include("../src/static.jl")
+include("../src/robust.jl")
 
 # --- Configuration des fonctions à évaluer ---
 # Chaque entrée contient :

@@ -3,9 +3,9 @@ using DataFrames
 using JuMP
 using Gurobi
 
-include("src/parser.jl")
-include("src/static.jl")
-include("src/robust.jl")
+include("../src/parser.jl")
+include("../src/static.jl")
+include("../src/robust.jl")
 
 # --- Configuration des fonctions à évaluer ---
 # Chaque entrée contient :
@@ -127,9 +127,9 @@ function extract_values(fname::Symbol, result)
     end
 end
 
-
-function evaluate_file_for_csv(file_path::String)
-    # Inclusion des sources et de la donnée
+# --- Fonction principale ---
+function evaluate_file(file_path::String)
+    # [Inclusions des fichiers src et data]
     for file in readdir("src")
         if endswith(file, ".jl") include(joinpath("src", file)) end
     end
@@ -137,94 +137,78 @@ function evaluate_file_for_csv(file_path::String)
     data_tuple = parse()
 
     all_results = Dict()
+
+    # 1. Exécution et collecte des résultats
     for fname in keys(functions_config)
         func = getfield(Main, fname)
         try
             args = get_args_from_tuple(data_tuple, functions_config[fname][:args])
             result = func(args...)
             all_results[fname] = extract_values(fname, result)
-        catch
+        catch e
             all_results[fname] = nothing
         end
     end
 
-    # --- Calculs des indicateurs ---
+    # 2. Calcul des références globales
+    # MODIFICATION : On exclut explicitement :solve_static du calcul du min_opt
     valid_opts_robust = [res[:optimum] for (name, res) in all_results 
-                         if name != :solve_static && res !== nothing && haskey(res, :optimum) && res[:optimum] !== nothing]
+                         if name != :solve_static && 
+                         res !== nothing && 
+                         haskey(res, :optimum) && 
+                         res[:optimum] !== nothing]
     
-    valid_lbs = [res[:lb] for res in values(all_results) 
-                 if res !== nothing && haskey(res, :lb) && res[:lb] !== nothing]
+    # Meilleure borne inférieure (LB) parmi toutes les méthodes qui en fournissent
+    valid_lbs = [(name == :solve_static ? res[:optimum] : res[:lb]) 
+    for (name, res) in all_results if res !== nothing && haskey(res, (name == :solve_static ? :optimum : :lb))
+         && res[(name == :solve_static ? :optimum : :lb)] !== nothing]
 
+    # Détermination des valeurs de référence
     min_opt_robust = isempty(valid_opts_robust) ? NaN : minimum(valid_opts_robust)
     best_lb = isempty(valid_lbs) ? -Inf : maximum(valid_lbs)
 
-    # --- Construction de la ligne du CSV ---
-    row = Dict{Symbol, Any}(:Instance => basename(file_path))
-
-    # 1. Gap Static-Robuste
-    if haskey(all_results, :solve_static) && all_results[:solve_static] !== nothing && !isnan(min_opt_robust)
+    # 3. Affichage final
+    println("\n=== RÉSULTATS : $(basename(file_path)) ===")
+    
+    # A) Écart du modèle Statique par rapport au meilleur résultat Robuste
+    if haskey(all_results, :solve_static) && all_results[:solve_static] !== nothing
         st_opt = all_results[:solve_static][:optimum]
-        row[:Gap_Static_Robuste] = (st_opt - min_opt_robust) / st_opt
-    else
-        row[:Gap_Static_Robuste] = NaN
+        if !isnan(min_opt_robust)
+            gap_st = (min_opt_robust - st_opt) / st_opt
+            println("Static Opt: $st_opt | Meilleur Robuste: $min_opt_robust")
+            println("GAP Static vs Best Robust Opt: $(round(gap_st*100, digits=2))%")
+        else
+            println("Static Opt: $st_opt | (Aucun résultat robuste valide pour comparer)")
+        end
     end
 
-    # 2. Pour chaque méthode robuste : Temps et Gap Opt-LB
+    # B) Détails des méthodes Robustes (comparaison au meilleur LB)
+    println("\nDétails des méthodes robustes :")
     robust_methods = [:solve_robust_dual, :solve_cutting_planes_CB, :solve_cutting_planes_noCB, :regret_greedy_robust]
     
     for m in robust_methods
         res = haskey(all_results, m) ? all_results[m] : nothing
+        print("  - Méthode $m : ")
         
-        prefix = string(m)
-        if res !== nothing && haskey(res, :optimum) && res[:optimum] !== nothing
-            opt = res[:optimum]
-            # Temps de calcul
-            row[Symbol(prefix, "_Time")] = haskey(res, :time) ? res[:time] : NaN
-            # Gap Opt-LB
-            row[Symbol(prefix, "_Gap_LB")] = (best_lb != -Inf) ? (opt - best_lb) / opt : NaN
-        else
-            row[Symbol(prefix, "_Time")] = NaN
-            row[Symbol(prefix, "_Gap_LB")] = NaN
+        if res === nothing || !haskey(res, :optimum) || res[:optimum] === nothing
+            println("N/A")
+            continue
         end
+        
+        opt = res[:optimum]
+        t = haskey(res, :time) ? res[:time] : "N/A"
+        
+        # Gap vs Best LB
+        if best_lb != -Inf
+            gap_lb = (opt - best_lb) / opt
+            msg_gap = "$(round(gap_lb*100, digits=2))%"
+        else
+            msg_gap = "N/A (pas de LB)"
+        end
+        
+        println("Opt = $opt | Temps = $(t)s | Gap/Best LB = $msg_gap")
     end
-
-    return row
+    println("-"^40)
 end
 
-function process_all_data(data_folder::String, output_csv::String)
-    # Lister tous les fichiers de données (ajustez l'extension si nécessaire)
-    files = filter(f -> endswith(f, ".tsp"), readdir(data_folder))
-    
-    all_rows = []
-    for f in files
-        println("Traitement de : $f")
-        push!(all_rows, evaluate_file_for_csv(joinpath(data_folder, f)))
-    end
-
-    # Création du DataFrame
-    df = DataFrame(all_rows)
-
-    # --- Réorganisation forcée des colonnes dans l'ordre demandé ---
-    ordered_cols = [:Instance, :Gap_Static_Robuste]
-    robust_methods = [:solve_robust_dual, :solve_cutting_planes_CB, :solve_cutting_planes_noCB, :regret_greedy_robust]
-    
-    for m in robust_methods
-        push!(ordered_cols, Symbol(string(m), "_Time"))
-        push!(ordered_cols, Symbol(string(m), "_Gap_LB"))
-    end
-
-    # On ne garde que les colonnes qui existent réellement dans le DF
-    final_cols = [c for c in ordered_cols if c in propertynames(df)]
-    df = df[:, final_cols]
-
-    # Sauvegarde
-    CSV.write(output_csv, df)
-    println("\nTerminé. Résultats sauvegardés dans : $output_csv")
-end
-
-# --- Lancement ---
-if !isempty(ARGS)
-    process_all_data(ARGS[1], "resultats_comparaison.csv")
-else
-    println("Usage: julia test_eval.jl <dossier_data>")
-end
+evaluate_file("data/10_ulysses_6.tsp")

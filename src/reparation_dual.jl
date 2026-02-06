@@ -2,9 +2,9 @@ using JuMP
 using GLPK
 using Gurobi
 
-include("src/parser.jl")
-include("src/robust.jl")
-include("src/static.jl")
+include("parser.jl")
+include("robust.jl")
+include("static.jl")
 include("amelioration_locale.jl")
 
 
