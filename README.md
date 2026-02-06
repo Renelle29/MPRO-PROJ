@@ -8,12 +8,10 @@ Le fichier PROJ contient notre modélisation théorique du problème.
 - [x] - Implémenter méthode statique.
 - [x] - Implémenter méthode robuste par dualisation.
 - [x] - Implémenter méthode robuste par plans coupants.
-- [ ] - Améliorations plans coupants: Initialisation des ensembles d'incertitudes.
 - [x] - Implémenter méthode robuste par branch-and-cut.
-- [ ] - Implémenter une heuristique avec garantie de performances.
-- [ ] - Tableau comparatif des performances de chacune des méthodes sur les instances proposées.
-- [ ] - Diagrammes de performance comparant les différentes méthodes.
-- [ ] - Rédaction du rapport et dépôt sur le GitHub (date limite 6 février 2026)
+- [x] - Tableau comparatif des performances de chacune des méthodes sur les instances proposées.
+- [x] - Diagrammes de performance comparant les différentes méthodes.
+- [x] - Rédaction du rapport et dépôt sur le GitHub (date limite 6 février 2026)
 
 ## Instructions d'utilisation
 
